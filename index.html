@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>霉豆腐摊主模拟器</title>
+    <!-- 引入字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        /* ================= 全局重置 ================= */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #333;
+            /* 修改字体 */
+            font-family: "ZCOOL KuaiLe", "Microsoft YaHei", cursive, sans-serif;
+            user-select: none; -webkit-user-select: none;
+            touch-action: manipulation; /* 改善触摸体验 */
+        }
+
+        #gameContainer {
+            position: relative; width: 100%; height: 100%;
+            max-width: 600px; margin: 0 auto;
+            background-image: url('img/bg_main.png'); 
+            background-size: cover; background-position: center;
+            overflow: hidden;
+        }
+
+        .game-btn {
+            padding: 14px 36px; font-size: 20px; font-weight: bold;
+            background-color: #ff9800; color: white;
+            border: none; border-radius: 50px;
+            box-shadow: 0 4px #e65100; cursor: pointer;
+            z-index: 200; pointer-events: auto; transition: transform 0.1s;
+            touch-action: manipulation;
+        }
+        .game-btn:active { transform: translateY(4px); box-shadow: none; }
+        
+        .stage-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; }
+
+        /* ================= Stage 1: 剧情 ================= */
+        #tofuBoard {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 320px; height: 320px;
+            background-image: url('img/tofu_raw.png');
+            background-size: contain; background-repeat: no-repeat;
+        }
+
+        #customerHand {
+            position: absolute; 
+            right: -300px; 
+            top: 50%; margin-top: -125px; 
+            width: 250px; height: 250px;
+            background-image: url('img/hand.png');
+            background-size: contain; background-repeat: no-repeat;
+            z-index: 20; 
+        }
+        
+        .hand-anim-in { animation: handIn 3s ease-out forwards; }
+        .hand-anim-out { transition: all 0.5s ease-in; right: -350px !important; }
+        
+        @keyframes handIn { 
+            0% { right: -300px; }
+            100% { right: 0; } /* 贴着屏幕边缘 */
+        }
+
+        /* ================= Stage 2: 切割 ================= */
+        #cuttingArea {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 350px; height: 350px;
+        }
+        #cuttingBoard {
+            width: 100%; height: 100%; 
+            background-image: url('img/tofu_raw.png');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+        }
+        #cutCanvas { position: absolute; top: 0; left: 0; z-index: 55; touch-action: none; }
+
+        /* ================= Stage 3: 裹料 ================= */
+        #mixingPot {
+            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+            width: 380px; height: 380px;
+            background-image: url('img/pot.png');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+        }
+        
+        .tofu-cube {
+            width: 80px; height: 80px;
+            position: absolute;
+            background-image: url('img/tofu_piece.png');
+            background-size: contain; background-repeat: no-repeat;
+            background-color: transparent; 
+            pointer-events: none; 
+            transition: filter 0.3s;
+        }
+
+        .filter-wet { filter: sepia(0.5) brightness(0.9); } 
+        .filter-red { filter: sepia(1) saturate(6) hue-rotate(-50deg) contrast(1.2); }
+        
+        .shake-inner { animation: rattle 0.2s infinite; }
+        @keyframes rattle {
+            0% { margin-left: 0; margin-top: 0; }
+            25% { margin-left: 4px; margin-top: -4px; }
+            50% { margin-left: -4px; margin-top: 4px; }
+            75% { margin-left: 4px; margin-top: 4px; }
+            100% { margin-left: 0; margin-top: 0; }
+        }
+
+        .shake-pot-anim { animation: shakePot 0.3s infinite; }
+        @keyframes shakePot { 
+            0% {transform:translate(-50%,-50%) rotate(0);} 
+            25% {transform:translate(-52%,-48%) rotate(-3deg);} 
+            75% {transform:translate(-48%,-52%) rotate(3deg);} 
+        }
+
+        /* 订单提示 */
+        #orderNote {
+            position: absolute; 
+            top: 140px;
+            left: 50%; transform: translateX(-50%);
+            background: #fff9c4; color: #333; padding: 12px 20px; font-size: 18px;
+            font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); display: none;
+            z-index: 100;
+            border-radius: 10px;
+            border: 2px dashed #ff9800;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        /* 验证提示标签 */
+        #validationTip {
+            position: absolute; 
+            top: 200px;
+            left: 50%; transform: translateX(-50%);
+            background: #ff5252; color: white; padding: 10px 20px; font-size: 16px;
+            font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); display: none;
+            z-index: 101;
+            border-radius: 25px;
+            border: 2px solid white;
+            max-width: 90%;
+            text-align: center;
+            animation: bounceIn 0.5s ease-out;
+        }
+        
+        @keyframes bounceIn {
+            0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+            70% { transform: translateX(-50%) scale(1.1); }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+
+        /* 调料栏 */
+        #seasoningBar {
+            position: absolute; 
+            bottom: 200px;
+            width: 100%; display: flex; justify-content: center; gap: 15px;
+            flex-wrap: wrap;
+        }
+        .seasoning-item {
+            text-align: center; color: #fff; font-size: 16px; opacity: 0.7;
+            text-shadow: 1px 1px 2px black; transition: all 0.2s;
+            display: flex; flex-direction: column; align-items: center;
+            touch-action: manipulation;
+        }
+        .seasoning-item img {
+            width: 70px; height: 70px;
+            display: block; margin-bottom: 5px;
+            transition: transform 0.2s;
+        }
+        .seasoning-item.clickable { opacity: 1; cursor: pointer; }
+        .seasoning-item.clickable img { animation: pulse 1s infinite; }
+        .seasoning-item.selected { opacity: 1; filter: drop-shadow(0 0 10px gold); }
+        .seasoning-item.selected img { transform: scale(1.2); animation: none; }
+        @keyframes pulse { 0% {transform:scale(1);} 50% {transform:scale(1.1);} 100% {transform:scale(1);} }
+
+        /* ================= Stage 4: 装罐 ================= */
+        #s4-pot-area {
+            position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%);
+            width: 380px; height: 380px;
+            background-image: url('img/pot.png');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+        }
+
+        .pack-tofu {
+            width: 80px; height: 80px;
+            position: absolute; 
+            background-image: url('img/tofu_piece.png');
+            background-size: contain; background-repeat: no-repeat;
+            background-color: transparent;
+            touch-action: none;
+        }
+        .pack-tofu.dragging { z-index: 999; transform: scale(1.3); }
+
+        /* 罐子容器 */
+        #oneJarContainer {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+            width: 220px; height: 330px;
+            display: flex; justify-content: center; align-items: flex-end;
+        }
+        
+        .jar-box {
+            width: 100%; height: 100%; position: relative;
+        }
+        
+        .jar-foreground {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('img/jar_square.png'); 
+            background-size: 100% 100%;
+            z-index: 20; pointer-events: none;
+        }
+
+        .jar-highlight {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border-radius: 20px;
+            box-shadow: 0 0 30px 10px gold;
+            opacity: 0; transition: opacity 0.2s; z-index: 5;
+        }
+        .jar-box.highlight .jar-highlight { opacity: 0.6; }
+
+        .jar-tofu-inner {
+            position: absolute; 
+            width: 60px; height: 60px;
+            background-image: url('img/tofu_piece.png');
+            background-size: contain; background-repeat: no-repeat;
+            background-color: transparent;
+            z-index: 10; 
+        }
+
+        /* ================= 对话框样式 ================= */
+        #dialogueBox {
+            position: absolute; 
+            top: 80px;
+            left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 500px;
+            min-height: 140px;
+            display: none; z-index: 400;
+            font-size: 18px; color: #333;
+            padding: 25px 30px 40px 30px;
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        
+        .dialogue-host {
+            background-image: url('img/dialogue_host.png');
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+        }
+        
+        .dialogue-customer {
+            background-image: url('img/dialogue_customer.png');
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+        }
+
+        #dialogueText {
+            margin: 0; line-height: 1.4;
+            text-shadow: 1px 1px 1px rgba(255,255,255,0.5);
+            padding: 10px;
+            max-width: 90%;
+        }
+
+        /* 点击继续提示 */
+        .click-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+            animation: fadeInOut 1.5s infinite;
+        }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* ================= 其他UI组件 ================= */
+        #uiLayer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 300; background-color: rgba(0,0,0,0.8);
+        }
+        
+        #progressContainer {
+            position: absolute; top: 120px; left: 20%; width: 60%; height: 12px;
+            background: rgba(0,0,0,0.5); border-radius: 6px; display: none; overflow: hidden;
+        }
+        #shakeProgressBar { width: 0; height: 100%; background: #76ff03; transition: width 0.1s; }
+        #resultCard {
+            background: #fff; width: 85%; padding: 30px; border-radius: 20px;
+            text-align: center; display: none; box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        }
+        
+        /* 背景音乐控制按钮 */
+        #bgmControl {
+            position: absolute; top: 20px; right: 20px;
+            width: 40px; height: 40px; background: rgba(0,0,0,0.5);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 1000; color: white; font-size: 24px;
+            touch-action: manipulation;
+        }
+
+        /* ================= 手机适配 ================= */
+        @media (max-width: 480px) {
+            .game-btn {
+                padding: 12px 28px;
+                font-size: 18px;
+            }
+            
+            #cuttingArea, #mixingPot, #s4-pot-area {
+                width: 300px !important;
+                height: 300px !important;
+            }
+            
+            #cutCanvas {
+                width: 300px !important;
+                height: 300px !important;
+            }
+            
+            .seasoning-item img {
+                width: 60px;
+                height: 60px;
+            }
+            
+            #dialogueBox {
+                padding: 20px 25px 35px 25px;
+                font-size: 16px;
+                min-height: 120px;
+            }
+            
+            #orderNote {
+                font-size: 16px;
+                padding: 10px 15px;
+                top: 120px;
+            }
+            
+            #validationTip {
+                font-size: 14px;
+                padding: 8px 16px;
+                top: 180px;
+            }
+            
+            #oneJarContainer {
+                width: 200px;
+                height: 300px;
+            }
+            
+            .jar-tofu-inner {
+                width: 55px;
+                height: 55px;
+            }
+            
+            #seasoningBar {
+                bottom: 180px;
+                gap: 10px;
+            }
+            
+            #s3-guide {
+                font-size: 20px !important;
+                top: 30px !important;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .seasoning-item img {
+                width: 50px;
+                height: 50px;
+            }
+            
+            .game-btn {
+                padding: 10px 24px;
+                font-size: 16px;
+            }
+            
+            #cuttingArea, #mixingPot, #s4-pot-area {
+                width: 280px !important;
+                height: 280px !important;
+            }
+            
+            #seasoningBar {
+                bottom: 160px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+
+    <!-- 背景音乐控制按钮 -->
+    <div id="bgmControl" onclick="toggleBGM()">♪</div>
+
+    <!-- STAGE 1 -->
+    <div id="stage1" class="stage-layer">
+        <div id="tofuBoard"></div>
+        <div id="customerHand"></div>
+    </div>
+
+    <!-- STAGE 2 -->
+    <div id="stage2" class="stage-layer">
+        <div style="position:absolute; top:40px; width:100%; text-align:center; color:#fff; font-weight:bold; font-size:20px; text-shadow:1px 1px 2px black;">滑动切割豆腐 (至少4刀)</div>
+        <div id="cuttingArea">
+            <div id="cuttingBoard"></div>
+            <canvas id="cutCanvas" width="350" height="350"></canvas>
+        </div>
+        <button id="btn-finish-cut" class="game-btn" style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%); display:none;">切割完成</button>
+    </div>
+
+    <!-- STAGE 3 -->
+    <div id="stage3" class="stage-layer">
+        <div style="position:absolute; top:40px; width:100%; text-align:center; color:#ffecb3; font-weight:bold; font-size:22px; text-shadow:1px 1px 2px black;" id="s3-guide">步骤1: 加入白酒</div>
+        <div id="orderNote"></div>
+        <!-- 新增验证提示标签 -->
+        <div id="validationTip"></div>
+        
+        <div id="progressContainer"><div id="shakeProgressBar"></div></div>
+        
+        <div id="mixingPot"></div>
+
+        <!-- 确认按钮调整到更下方 -->
+        <button id="btn-confirm-mix" class="game-btn" style="position:absolute; bottom:100px; left:50%; transform:translateX(-50%); display:none;">确认调配</button>
+
+        <div id="seasoningBar">
+            <div class="seasoning-item" id="item-spirit"><img src="img/icon_wine.png">白酒</div>
+            <div class="seasoning-item" id="item-pepper"><img src="img/icon_pepper.png">花椒</div>
+            <div class="seasoning-item" id="item-five"><img src="img/icon_five.png">五香</div>
+            <div class="seasoning-item" id="item-chili"><img src="img/icon_chili.png">辣椒</div>
+            <div class="seasoning-item" id="item-salt"><img src="img/icon_salt.png">食盐</div>
+        </div>
+    </div>
+
+    <!-- STAGE 4: 装罐 -->
+    <div id="stage4" class="stage-layer">
+        <div style="position:absolute; top:40px; width:100%; text-align:center; color:#fff; font-weight:bold; font-size:20px; text-shadow:1px 1px 2px black;">拖拽入罐</div>
+        
+        <div id="s4-pot-area"></div>
+        
+        <div id="oneJarContainer">
+            <div class="jar-box" id="theJar">
+                <div class="jar-highlight"></div>
+                <div class="jar-foreground"></div>
+            </div>
+        </div>
+
+        <button id="btn-finish-pack" class="game-btn" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%);">完成包装</button>
+    </div>
+
+    <!-- 对话框 -->
+    <div id="dialogueBox">
+        <p id="dialogueText"></p>
+        <div class="click-hint">点击继续</div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="uiLayer">
+        <div id="gameTitle" style="color:white; font-size:36px; font-weight:bold; margin-bottom:30px; text-shadow:2px 2px 4px black;">《霉豆腐摊主模拟器》</div>
+        
+        <div id="resultCard">
+            <div style="font-size:60px;">🎁</div>
+            <h2 id="res-name" style="color:#d32f2f; margin:15px 0; font-size:28px;">装罐完成</h2>
+            <div style="text-align:left; background:#f5f5f5; padding:20px; border-radius:10px; color:#555; font-size:18px;">
+                <p>顾客要求：<span id="res-req" style="font-weight:bold; color:#1565c0;">--</span></p>
+                <p>您的配方：<span id="res-mix" style="font-weight:bold; color:#2e7d32;">--</span></p>
+                <p>装罐数量：<span id="res-count" style="font-weight:bold;">0</span> 块</p>
+            </div>
+            <button class="game-btn" onclick="location.reload()" style="margin-top:25px; width:100%;">再来一局</button>
+        </div>
+
+        <button id="actionBtn" class="game-btn">开始营业</button>
+    </div>
+
+</div>
+
+<script>
+    // 全局状态
+    const state = {
+        s3Step: 0, customerReq: null, playerMix: [],
+        shakeVal: 0, isShaking: false, 
+        currentFilterClass: 'filter-red',
+        jar: { count: 0, placedPieces: [] },
+        dialogueQueue: [],
+        isDialoguePlaying: false,
+        currentDialogueAudio: null,
+        bgmEnabled: true,
+        saltAdded: false // 食盐是否已添加
+    };
+
+    // 顾客回答设定：一共设定了5种不同的回答
+    const SCENARIOS = [
+        { 
+            text: "微辣，加花椒", 
+            targets: ['item-pepper'], 
+            label: "微辣(花椒)",
+            audio: "sound/dialogue_customer_1.mp3"
+        },
+        { 
+            text: "普通辣", 
+            targets: ['item-chili'], 
+            label: "香辣",
+            audio: "sound/dialogue_customer_2.mp3"
+        },
+        { 
+            text: "特辣！麻辣都要", 
+            targets: ['item-pepper', 'item-chili'], 
+            label: "麻辣",
+            audio: "sound/dialogue_customer_3.mp3"
+        },
+        { 
+            text: "我不吃辣，来个五香的", 
+            targets: ['item-five'], 
+            label: "五香",
+            audio: "sound/dialogue_customer_4.mp3"
+        },
+        { 
+            text: "给我来个终极变态辣！", 
+            targets: ['item-pepper', 'item-chili', 'item-five'], 
+            label: "变态辣",
+            audio: "sound/dialogue_customer_5.mp3"
+        }
+    ];
+
+    // 对话配置文件
+    const dialogueConfig = {
+        "s1_1": { text: "摊主：美女要不要买霉豆腐", role: "host", audio: "sound/dialogue_s1_1.mp3" },
+        "s1_2": { text: "摊主：诶诶诶！你别摸呀！你摸了我怎么卖", role: "host", audio: "sound/dialogue_s1_2.mp3" },
+        "s1_3": { text: "顾客：那我来一板吧", role: "customer", audio: "sound/dialogue_s1_3.mp3" },
+        "s3_ask": { text: "摊主：要微辣、普通辣，还是特辣？", role: "host", audio: "sound/dialogue_s3_ask.mp3" },
+        "s3_fail": { text: "顾客：这不是我要的，我不买了！", role: "customer", audio: "sound/dialogue_fail.mp3" }
+    };
+
+    // 音频对象
+    const sounds = {
+        click: new Audio('sound/click.mp3'),
+        cut: new Audio('sound/cut.mp3'),
+        cut_complete: new Audio('sound/cut_complete.mp3'),
+        shake: new Audio('sound/shake.mp3'),
+        drop: new Audio('sound/drop.mp3'),
+        dialogue: new Audio('sound/dialogue.mp3'),
+        complete: new Audio('sound/complete.mp3'),
+        fail: new Audio('sound/fail.mp3')
+    };
+
+    // 背景音乐
+    const bgm = new Audio('sound/bgm.mp3');
+    bgm.loop = true;
+    bgm.volume = 0.3;
+
+    // 初始化背景音乐
+    function initBGM() {
+        // 等待用户交互后播放音乐
+        const playBGM = () => {
+            if (state.bgmEnabled) {
+                bgm.play().catch(e => console.log("背景音乐播放失败:", e));
+            }
+        };
+        
+        // 添加点击事件监听
+        document.addEventListener('click', playBGM, { once: true });
+        document.addEventListener('touchstart', playBGM, { once: true });
+        
+        updateBGMButton();
+    }
+
+    // 切换背景音乐
+    function toggleBGM() {
+        state.bgmEnabled = !state.bgmEnabled;
+        
+        if (state.bgmEnabled) {
+            bgm.play().catch(e => console.log("背景音乐播放失败:", e));
+        } else {
+            bgm.pause();
+        }
+        
+        updateBGMButton();
+    }
+
+    // 更新背景音乐控制按钮
+    function updateBGMButton() {
+        const btn = document.getElementById('bgmControl');
+        if (btn) {
+            btn.innerHTML = state.bgmEnabled ? '♪' : '♫';
+            btn.title = state.bgmEnabled ? '点击关闭背景音乐' : '点击开启背景音乐';
+        }
+    }
+
+    // 预加载音频
+    function preloadSounds() {
+        for(let key in sounds) {
+            sounds[key].load();
+            sounds[key].volume = 0.6;
+        }
+    }
+
+    // 播放音效
+    function playSound(name) {
+        if(sounds[name] && state.bgmEnabled) {
+            sounds[name].currentTime = 0;
+            sounds[name].play().catch(e => console.log("音效播放失败:", e));
+        }
+    }
+
+    // 播放对话配音
+    function playDialogueAudio(audioPath) {
+        if (state.currentDialogueAudio) {
+            state.currentDialogueAudio.pause();
+            state.currentDialogueAudio.currentTime = 0;
+        }
+        
+        if (audioPath) {
+            state.currentDialogueAudio = new Audio(audioPath);
+            state.currentDialogueAudio.volume = 0.7;
+            state.currentDialogueAudio.play().catch(e => console.log("对话音频播放失败:", e));
+        }
+    }
+
+    // 显示验证提示标签
+    function showValidationTip(message) {
+        const tip = document.getElementById('validationTip');
+        tip.textContent = message;
+        tip.style.display = 'block';
+        playSound('click'); // 播放点击音效
+        
+        // 2秒后自动消失
+        setTimeout(() => {
+            tip.style.display = 'none';
+        }, 2000);
+    }
+
+    const $ = (id) => document.getElementById(id);
+
+    window.onload = () => {
+        preloadSounds();
+        initBGM();
+        $('actionBtn').onclick = handleMainAction;
+        $('btn-finish-cut').onclick = () => {
+            playSound('click');
+            showTransition("切割完成", "下一步：摇晃裹料 >>", startStage3);
+        };
+        $('btn-confirm-mix').onclick = validateMix;
+        $('btn-finish-pack').onclick = showResult;
+        
+        $('dialogueBox').onclick = nextDialogue;
+        
+        // 防止手机浏览器下拉刷新
+        document.addEventListener('touchmove', function(e) {
+            if(e.scale !== 1) { e.preventDefault(); }
+        }, { passive: false });
+    };
+
+    function handleMainAction() {
+        playSound('click');
+        const txt = $('actionBtn').textContent;
+        if (txt.includes("营业")) startStage1();
+        else if (txt.includes("裹料")) startStage3();
+        else if (txt.includes("装罐")) startStage4();
+    }
+
+    function showTransition(title, btnText, nextFunc) {
+        $('uiLayer').style.display = 'flex';
+        $('gameTitle').textContent = title;
+        $('actionBtn').textContent = btnText;
+        $('actionBtn').style.display = 'block';
+        $('resultCard').style.display = 'none';
+        $('actionBtn').onclick = nextFunc;
+    }
+
+    function hideAll() {
+        ['stage1','stage2','stage3','stage4'].forEach(id => $(id).style.display = 'none');
+        $('uiLayer').style.display = 'none';
+    }
+
+    // ================= 对话系统 =================
+    
+    function addToDialogueQueue(dialogueKey) {
+        const dialogue = dialogueConfig[dialogueKey];
+        if (dialogue) {
+            state.dialogueQueue.push(dialogue);
+            if (!state.isDialoguePlaying) {
+                showNextDialogue();
+            }
+        } else {
+            console.warn("未配置的对话:", dialogueKey);
+        }
+    }
+    
+    function showNextDialogue() {
+        if (state.dialogueQueue.length === 0) {
+            state.isDialoguePlaying = false;
+            $('dialogueBox').style.display = 'none';
+            
+            if (state.dialogueCallback) {
+                state.dialogueCallback();
+                state.dialogueCallback = null;
+            }
+            return;
+        }
+        
+        state.isDialoguePlaying = true;
+        const dialogue = state.dialogueQueue.shift();
+        
+        showDialogue(dialogue.text, dialogue.role, dialogue.audio);
+    }
+    
+    function nextDialogue() {
+        if (state.isDialoguePlaying) {
+            showNextDialogue();
+        }
+    }
+    
+    function showDialogue(txt, role, audioPath) {
+        const d = $('dialogueBox'); 
+        const text = $('dialogueText');
+        text.textContent = txt;
+        
+        d.className = role === 'host' ? 'dialogue-host' : 'dialogue-customer';
+        d.style.display = 'flex';
+        
+        if (audioPath) {
+            playDialogueAudio(audioPath);
+        } else {
+            playSound('dialogue');
+        }
+    }
+    
+    function showSimpleDialogue(txt, role, audioKey) {
+        const d = $('dialogueBox'); 
+        const text = $('dialogueText');
+        text.textContent = txt;
+        
+        d.className = role === 'host' ? 'dialogue-host' : 'dialogue-customer';
+        d.style.display = 'flex';
+        
+        d.onclick = function() {
+            $('dialogueBox').style.display = 'none';
+            d.onclick = nextDialogue;
+        };
+        
+        if (audioKey && sounds[audioKey]) {
+            playSound(audioKey);
+        } else {
+            playSound('dialogue');
+        }
+    }
+
+    // --- S1: 剧情互动 ---
+    function startStage1() {
+        hideAll(); $('stage1').style.display = 'block';
+        const hand = $('customerHand');
+        hand.className = ''; void hand.offsetWidth;
+        
+        state.dialogueQueue = [];
+        
+        addToDialogueQueue("s1_1");
+        
+        state.dialogueCallback = () => {
+            hand.classList.add('hand-anim-in');
+            
+            let clicked = false;
+            const clickHandler = (e) => {
+                if (clicked) return;
+                e.preventDefault();
+                if (hand.classList.contains('hand-anim-in')) {
+                    clicked = true;
+                    hand.classList.remove('hand-anim-in');
+                    const s = window.getComputedStyle(hand);
+                    hand.style.right = s.right; hand.style.top = s.top;
+
+                    addToDialogueQueue("s1_2");
+                    addToDialogueQueue("s1_3");
+                    
+                    state.dialogueCallback = () => {
+                        hand.classList.add('hand-anim-out');
+                        setTimeout(() => {
+                            $('dialogueBox').style.display = 'none';
+                            startStage2();
+                        }, 300);
+                    };
+                }
+            };
+            
+            hand.addEventListener('touchstart', clickHandler, {passive:false});
+            hand.addEventListener('mousedown', clickHandler);
+        };
+    }
+
+    // --- S2: 切割 ---
+    function startStage2() {
+        hideAll(); $('stage2').style.display = 'block';
+        $('cuttingBoard').style.backgroundImage = "url('img/tofu_raw.png')";
+        
+        const cvs = $('cutCanvas'); const ctx = cvs.getContext('2d');
+        ctx.clearRect(0,0,350,350);
+        ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        let isD = false, cutC = 0;
+        let cutCompleteSoundPlayed = false; // 标记切割完成音效是否已播放
+
+        const getP = (e) => {
+            const r = cvs.getBoundingClientRect();
+            const x = e.touches?e.touches[0].clientX:e.clientX;
+            const y = e.touches?e.touches[0].clientY:e.clientY;
+            return {x:x-r.left, y:y-r.top};
+        };
+
+        const start = (e) => { 
+            e.preventDefault(); 
+            isD=true; 
+            ctx.beginPath(); 
+            const p=getP(e); 
+            ctx.moveTo(p.x, p.y); 
+        };
+        const move = (e) => { 
+            if(!isD)return; 
+            e.preventDefault(); 
+            const p=getP(e); 
+            ctx.lineTo(p.x, p.y); 
+            ctx.stroke(); 
+            if(Math.random() < 0.3) playSound('cut');
+        };
+        const end = () => { 
+            if(isD){ 
+                isD=false; cutC++; 
+                if(cutC>=4) { 
+                    $('cuttingBoard').style.backgroundImage = "url('img/board.png')";
+                    $('btn-finish-cut').style.display='block'; 
+                    
+                    // 在完成4刀时立即播放音效
+                    if (!cutCompleteSoundPlayed) {
+                        playSound('cut_complete');
+                        cutCompleteSoundPlayed = true;
+                    }
+                }
+            } 
+        };
+
+        cvs.addEventListener('touchstart', start, {passive:false});
+        cvs.addEventListener('touchmove', move, {passive:false});
+        cvs.addEventListener('touchend', end);
+        cvs.addEventListener('mousedown', start);
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', end);
+    }
+
+    // --- S3: 裹料 ---
+    function startStage3() {
+        hideAll(); $('stage3').style.display = 'block';
+        state.playerMix = []; state.s3Step = 0; state.saltAdded = false;
+        $('orderNote').style.display = 'none';
+        const pot = $('mixingPot'); pot.innerHTML = '';
+        
+        for(let i=0; i<12; i++) {
+            let d = document.createElement('div');
+            d.className = 'tofu-cube';
+            let left = 190 + (Math.random()*120 - 60) - 40; 
+            let top = 190 + (Math.random()*120 - 60) - 40;
+            d.style.left = left + 'px';
+            d.style.top = top + 'px';
+            d.style.transform = `rotate(${Math.random()*360}deg)`;
+            pot.appendChild(d);
+        }
+        updateS3UI(0);
+    }
+
+    function updateS3UI(step) {
+        state.s3Step = step;
+        const guide = $('s3-guide');
+        ['item-spirit','item-pepper','item-five','item-chili','item-salt'].forEach(id=>{
+            const el = $(id); el.className = 'seasoning-item'; el.onclick = null;
+        });
+
+        if (step===0) {
+            guide.textContent = "步骤1: 点击【白酒】杀菌";
+            const btn = $('item-spirit'); btn.classList.add('clickable');
+            btn.onclick = () => {
+                playSound('click');
+                btn.classList.remove('clickable'); btn.classList.add('selected');
+                runShake("已加白酒，摇晃拌匀！", () => {
+                    document.querySelectorAll('.tofu-cube').forEach(c => c.classList.add('filter-wet'));
+                    triggerCustomer();
+                });
+            };
+        } else if (step===1) {
+            // 将食盐和其他配料放在同一步骤
+            guide.textContent = "步骤2: 根据顾客要求选料，最后加【食盐】";
+            // 所有调料都可以点击
+            ['item-pepper','item-chili','item-five','item-salt'].forEach(id=>{
+                const btn = $(id); btn.classList.add('clickable');
+                btn.onclick = () => {
+                    playSound('click');
+                    
+                    if (id === 'item-salt') {
+                        // 食盐只需添加一次
+                        if (!state.saltAdded) {
+                            btn.classList.add('selected');
+                            state.playerMix.push(id);
+                            state.saltAdded = true;
+                        }
+                    } else {
+                        // 其他调料可以切换选择状态
+                        btn.classList.toggle('selected');
+                        if (state.playerMix.includes(id)) {
+                            state.playerMix = state.playerMix.filter(x=>x!==id);
+                        } else {
+                            state.playerMix.push(id);
+                        }
+                    }
+                };
+            });
+            $('btn-confirm-mix').style.display='block';
+        }
+    }
+
+    function triggerCustomer() {
+        state.customerReq = SCENARIOS[Math.floor(Math.random()*SCENARIOS.length)];
+        
+        state.dialogueQueue = [];
+        
+        addToDialogueQueue("s3_ask");
+        
+        const customerResponse = {
+            text: "顾客：" + state.customerReq.text,
+            role: "customer",
+            audio: state.customerReq.audio
+        };
+        
+        state.dialogueQueue.push(customerResponse);
+        
+        state.dialogueCallback = () => {
+            $('dialogueBox').style.display = 'none';
+            $('orderNote').textContent = "订单: " + state.customerReq.text;
+            $('orderNote').style.display = 'block';
+            updateS3UI(1);
+        };
+        
+        if (!state.isDialoguePlaying) {
+            showNextDialogue();
+        }
+    }
+
+    function validateMix() {
+        // 检查是否至少选择了一种调料（不包括食盐）
+        const nonSaltSelections = state.playerMix.filter(id => id !== 'item-salt');
+        if(nonSaltSelections.length===0){ 
+            // 使用验证提示标签而不是对话框
+            showValidationTip("至少放点料吧！");
+            return; 
+        }
+        
+        // 检查是否加了食盐
+        if (!state.saltAdded) {
+            // 使用验证提示标签而不是对话框
+            showValidationTip("别忘了加食盐！");
+            return;
+        }
+        
+        $('btn-confirm-mix').style.display='none';
+        
+        state.currentFilterClass = "filter-red";
+
+        runShake("摇晃裹粉！", () => {
+            document.querySelectorAll('.tofu-cube').forEach(c => {
+                c.classList.remove('filter-wet');
+                c.classList.add(state.currentFilterClass);
+            });
+            // 直接进入下一步
+            setTimeout(() => showTransition("腌制完成", "下一步：创意装罐 >>", startStage4), 800);
+        });
+    }
+
+    function runShake(msg, cb) {
+        state.isShaking = true; state.shakeVal = 0;
+        $('s3-guide').textContent = msg; $('progressContainer').style.display = 'block';
+        
+        $('mixingPot').classList.add('shake-pot-anim');
+        document.querySelectorAll('.tofu-cube').forEach(c => c.classList.add('shake-inner'));
+
+        playSound('shake');
+
+        const update = () => {
+            if(!state.isShaking) return;
+            state.shakeVal+=5; $('shakeProgressBar').style.width=state.shakeVal+'%';
+            if(state.shakeVal>=100){
+                state.isShaking=false; 
+                $('mixingPot').classList.remove('shake-pot-anim');
+                document.querySelectorAll('.tofu-cube').forEach(c => c.classList.remove('shake-inner'));
+                $('progressContainer').style.display='none'; $('shakeProgressBar').style.width='0%'; 
+                cb();
+            }
+        };
+
+        const pot = $('mixingPot');
+        pot.addEventListener('touchmove', (e)=>{e.preventDefault(); update();}, {passive:false});
+        pot.addEventListener('mousemove', (e)=>{if(e.buttons===1) update();});
+        window.ondevicemotion = (e) => {
+            let acc = e.accelerationIncludingGravity;
+            if(state.isShaking && acc && (Math.abs(acc.x)>15 || Math.abs(acc.y)>15)) update();
+        };
+    }
+
+    // --- S4: 装罐 ---
+    function startStage4() {
+        hideAll(); $('stage4').style.display = 'block';
+        const src = $('s4-pot-area'); src.innerHTML = '';
+        state.jar.count = 0;
+        state.jar.placedPieces = [];
+
+        const oldInner = document.querySelectorAll('.jar-tofu-inner');
+        oldInner.forEach(el => el.remove());
+
+        for(let i=0; i<10; i++) {
+            let t = document.createElement('div'); t.className = 'pack-tofu';
+            t.classList.add(state.currentFilterClass);
+            let left = 190 + (Math.random()*100 - 50) - 40; 
+            let top = 190 + (Math.random()*100 - 50) - 40;
+            t.style.left = left+'px'; t.style.top = top+'px';
+            t.style.transform = `rotate(${Math.random()*360}deg)`;
+            
+            enableDrag(t); src.appendChild(t);
+        }
+    }
+
+    function enableDrag(el) {
+        let isD=false, startX, startY;
+        const start = (e) => {
+            e.preventDefault(); isD=true; const p=e.touches?e.touches[0]:e;
+            const r = el.getBoundingClientRect();
+            startX=p.clientX-r.left; startY=p.clientY-r.top;
+            el.classList.add('dragging');
+            el.style.left=r.left+'px'; el.style.top=r.top+'px'; 
+            document.body.appendChild(el);
+        };
+        const move = (e) => {
+            if(!isD) return; e.preventDefault(); const p=e.touches?e.touches[0]:e;
+            el.style.left=(p.clientX-startX)+'px'; el.style.top=(p.clientY-startY)+'px';
+            checkHover(el);
+        };
+        const end = () => {
+            if(!isD) return; isD=false; el.classList.remove('dragging');
+            if(checkDrop(el)) { 
+                el.remove(); 
+                addTofuToJar(); 
+                playSound('drop');
+            } else {
+                const src = $('s4-pot-area'); src.appendChild(el);
+                let left = 190 + (Math.random()*100 - 50) - 40; 
+                let top = 190 + (Math.random()*100 - 50) - 40;
+                el.style.left=left+'px'; el.style.top=top+'px';
+            }
+            $('theJar').classList.remove('highlight');
+        };
+        el.addEventListener('touchstart', start, {passive:false});
+        el.addEventListener('touchmove', move, {passive:false});
+        el.addEventListener('touchend', end);
+        el.addEventListener('mousedown', start);
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', end);
+    }
+
+    function checkHover(el) {
+        const r = el.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
+        const jar = $('theJar'); const jr = jar.getBoundingClientRect();
+        if(cx>jr.left && cx<jr.right && cy>jr.top && cy<jr.bottom) jar.classList.add('highlight');
+        else jar.classList.remove('highlight');
+    }
+
+    function checkDrop(el) {
+        const r = el.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
+        const jr = $('theJar').getBoundingClientRect();
+        return (cx>jr.left && cx<jr.right && cy>jr.top && cy<jr.bottom);
+    }
+
+    function addTofuToJar() {
+        // 罐子容量限制改为10块
+        if (state.jar.count >= 10) {
+            showValidationTip("罐子已经满了！");
+            return;
+        }
+        
+        state.jar.count++;
+        const jarBox = $('theJar');
+        
+        let inner = document.createElement('div');
+        inner.className = 'jar-tofu-inner';
+        inner.classList.add(state.currentFilterClass);
+        
+        // 改进的网格放置算法，确保豆腐不超出罐子范围
+        const gridSize = 60;
+        const jarWidth = 220;
+        const jarHeight = 280;
+        const padding = 20;
+        
+        const cols = Math.floor((jarWidth - padding * 2) / gridSize);
+        const rows = Math.floor((jarHeight - padding * 2) / gridSize);
+        const maxCapacity = cols * rows;
+        
+        // 检查是否还有空间
+        if (state.jar.placedPieces.length >= maxCapacity) {
+            showValidationTip("罐子已经满了！");
+            state.jar.count--;
+            return;
+        }
+        
+        let placed = false;
+        // 尝试放置到网格位置
+        for (let row = 0; row < rows && !placed; row++) {
+            for (let col = 0; col < cols && !placed; col++) {
+                const posKey = `${row},${col}`;
+                if (!state.jar.placedPieces.includes(posKey)) {
+                    const left = padding + col * gridSize;
+                    const bottom = padding + row * gridSize;
+                    
+                    inner.style.left = left + 'px';
+                    inner.style.bottom = bottom + 'px';
+                    inner.style.transform = `rotate(${Math.random()*20-10}deg) scale(0.85)`;
+                    
+                    state.jar.placedPieces.push(posKey);
+                    placed = true;
+                }
+            }
+        }
+        
+        // 如果网格放满了，随机放置（但确保在罐子范围内）
+        if (!placed) {
+            const maxLeft = jarWidth - gridSize - padding;
+            const maxBottom = jarHeight - gridSize - padding;
+            
+            const left = padding + Math.random() * maxLeft;
+            const bottom = padding + Math.random() * maxBottom;
+            
+            inner.style.left = left + 'px';
+            inner.style.bottom = bottom + 'px';
+            inner.style.transform = `rotate(${Math.random()*20-10}deg) scale(0.8)`;
+        }
+        
+        jarBox.appendChild(inner);
+    }
+
+    function showResult() {
+        if(state.jar.count===0) { 
+            showSimpleDialogue("还没装罐呢！", 'host', 'dialogue');
+            return; 
+        }
+        
+        // 检查是否按照客人的要求完成
+        let isCorrect = false;
+        if (state.customerReq && state.playerMix) {
+            // 移除食盐，因为食盐是必须的但不影响口味判断
+            const playerTargetsWithoutSalt = state.playerMix.filter(id => id !== 'item-salt');
+            const requiredTargets = state.customerReq.targets;
+            
+            // 检查两个数组是否包含相同的元素（顺序不重要）
+            if (playerTargetsWithoutSalt.length === requiredTargets.length) {
+                isCorrect = playerTargetsWithoutSalt.every(item => requiredTargets.includes(item)) &&
+                           requiredTargets.every(item => playerTargetsWithoutSalt.includes(item));
+            }
+        }
+        
+        if (!isCorrect) {
+            // 制作失败
+            playSound('fail');
+            
+            state.dialogueQueue = [];
+            
+            state.dialogueQueue.push({
+                text: "顾客：这不是我要的，我不买了！",
+                role: "customer",
+                audio: "sound/dialogue_fail.mp3"
+            });
+            
+            state.dialogueCallback = () => {
+                $('dialogueBox').style.display = 'none';
+                $('uiLayer').style.display='flex'; $('gameTitle').style.display='none';
+                $('actionBtn').style.display='none'; $('resultCard').style.display='block';
+                $('res-name').textContent = "制作失败";
+                $('res-name').style.color = "#d32f2f";
+                $('res-req').textContent = state.customerReq?state.customerReq.label:"无";
+                $('res-count').textContent = state.jar.count;
+                let mix = "自创";
+                if(state.playerMix.includes('item-chili')) mix="香辣";
+                if(state.playerMix.includes('item-pepper') && state.playerMix.includes('item-chili')) mix="麻辣";
+                if(state.playerMix.includes('item-five')) mix="五香";
+                $('res-mix').textContent = mix + " (已加盐)";
+            };
+            
+            if (!state.isDialoguePlaying) {
+                showNextDialogue();
+            }
+        } else {
+            // 制作成功
+            playSound('click');
+            playSound('complete');
+            
+            $('uiLayer').style.display='flex'; $('gameTitle').style.display='none';
+            $('actionBtn').style.display='none'; $('resultCard').style.display='block';
+            $('res-name').textContent = "装罐完成";
+            $('res-name').style.color = "#2e7d32";
+            $('res-req').textContent = state.customerReq?state.customerReq.label:"无";
+            $('res-count').textContent = state.jar.count;
+            let mix = "自创";
+            if(state.playerMix.includes('item-chili')) mix="香辣";
+            if(state.playerMix.includes('item-pepper') && state.playerMix.includes('item-chili')) mix="麻辣";
+            if(state.playerMix.includes('item-five')) mix="五香";
+            $('res-mix').textContent = mix + " (已加盐)";
+        }
+    }
+    
+    // 全局函数供HTML调用
+    window.toggleBGM = toggleBGM;
+    
+    // 添加PWA支持（可选）
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js').catch(function(error) {
+                console.log('ServiceWorker registration failed: ', error);
+            });
+        });
+    }
+</script>
+</body>
+</html>
